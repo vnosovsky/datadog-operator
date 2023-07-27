@@ -94,7 +94,7 @@ func (r *Reconciler) finalizeDadV2(reqLogger logr.Logger, obj client.Object) {
 	// delete, we figure out its dependencies, store them in the dependencies
 	// store, and then call the DeleteAll function of the store.
 
-	features, requiredComponents := feature.BuildFeatures(
+	features, requiredComponents := feature.BuildFeatures(nil,
 		dda, reconcilerOptionsToFeatureOptions(&r.options, reqLogger))
 
 	storeOptions := &dependencies.StoreOptions{

@@ -26,12 +26,16 @@ func init() {
 }
 
 func buildLiveContainerFeature(options *feature.Options) feature.Feature {
-	liveContainerFeat := &liveContainerFeature{}
+	liveContainerFeat := &liveContainerFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return liveContainerFeat
 }
 
-type liveContainerFeature struct{}
+type liveContainerFeature struct {
+	monoContainerEnabled bool
+}
 
 // ID returns the ID of the Feature
 func (f *liveContainerFeature) ID() feature.IDType {
@@ -40,15 +44,28 @@ func (f *liveContainerFeature) ID() feature.IDType {
 
 // Configure is used to configure the feature from a v2alpha1.DatadogAgent instance.
 func (f *liveContainerFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp feature.RequiredComponents) {
-	if dda.Spec.Features.LiveContainerCollection != nil && apiutils.BoolValue(dda.Spec.Features.LiveContainerCollection.Enabled) {
-		reqComp = feature.RequiredComponents{
-			Agent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.CoreAgentContainerName,
-					apicommonv1.ProcessAgentContainerName,
+	if f.monoContainerEnabled {
+		if dda.Spec.Features.LiveContainerCollection != nil && apiutils.BoolValue(dda.Spec.Features.LiveContainerCollection.Enabled) {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.NonPrivilegedMonoContainerName,
+					},
 				},
-			},
+			}
+		}
+	} else {
+		if dda.Spec.Features.LiveContainerCollection != nil && apiutils.BoolValue(dda.Spec.Features.LiveContainerCollection.Enabled) {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.CoreAgentContainerName,
+						apicommonv1.ProcessAgentContainerName,
+					},
+				},
+			}
 		}
 	}
 
@@ -87,17 +104,24 @@ func (f *liveContainerFeature) ManageClusterAgent(managers feature.PodTemplateMa
 // ManageNodeAgent allows a feature to configure the Node Agent's corev1.PodTemplateSpec
 // It should do nothing if the feature doesn't need to configure it.
 func (f *liveContainerFeature) ManageNodeAgent(managers feature.PodTemplateManagers) error {
+	var agentName apicommonv1.AgentContainerName
+	if f.monoContainerEnabled {
+		agentName = apicommonv1.NonPrivilegedMonoContainerName
+	} else {
+		agentName = apicommonv1.ProcessAgentContainerName
+	}
+
 	// cgroups volume mount
 	cgroupsVol, cgroupsVolMount := volume.GetVolumes(apicommon.CgroupsVolumeName, apicommon.CgroupsHostPath, apicommon.CgroupsMountPath, true)
-	managers.VolumeMount().AddVolumeMountToContainer(&cgroupsVolMount, apicommonv1.ProcessAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&cgroupsVolMount, agentName)
 	managers.Volume().AddVolume(&cgroupsVol)
 
 	// procdir volume mount
 	procdirVol, procdirVolMount := volume.GetVolumes(apicommon.ProcdirVolumeName, apicommon.ProcdirHostPath, apicommon.ProcdirMountPath, true)
-	managers.VolumeMount().AddVolumeMountToContainer(&procdirVolMount, apicommonv1.ProcessAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&procdirVolMount, agentName)
 	managers.Volume().AddVolume(&procdirVol)
 
-	managers.EnvVar().AddEnvVarToContainer(apicommonv1.ProcessAgentContainerName, &corev1.EnvVar{
+	managers.EnvVar().AddEnvVarToContainer(agentName, &corev1.EnvVar{
 		Name:  apicommon.DDContainerCollectionEnabled,
 		Value: "true",
 	})

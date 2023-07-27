@@ -40,6 +40,7 @@ func buildOrchestratorExplorerFeature(options *feature.Options) feature.Feature 
 
 	if options != nil {
 		orchestratorExplorerFeat.logger = options.Logger
+		orchestratorExplorerFeat.monoContainerEnabled = options.MonoContainerEnabled
 	}
 
 	return orchestratorExplorerFeat
@@ -60,6 +61,8 @@ type orchestratorExplorerFeature struct {
 	logger                      logr.Logger
 	customConfigAnnotationKey   string
 	customConfigAnnotationValue string
+
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -74,9 +77,19 @@ func (f *orchestratorExplorerFeature) Configure(dda *v2alpha1.DatadogAgent) (req
 
 	if orchestratorExplorer != nil && apiutils.BoolValue(orchestratorExplorer.Enabled) {
 		reqComp.ClusterAgent.IsRequired = apiutils.NewBoolPointer(true)
-		reqComp.Agent = feature.RequiredComponent{
-			IsRequired: apiutils.NewBoolPointer(true),
-			Containers: []apicommonv1.AgentContainerName{apicommonv1.CoreAgentContainerName, apicommonv1.ProcessAgentContainerName},
+
+		if f.monoContainerEnabled {
+			reqComp.Agent = feature.RequiredComponent{
+				IsRequired: apiutils.NewBoolPointer(true),
+				Containers: []apicommonv1.AgentContainerName{
+					apicommonv1.NonPrivilegedMonoContainerName,
+				},
+			}
+		} else {
+			reqComp.Agent = feature.RequiredComponent{
+				IsRequired: apiutils.NewBoolPointer(true),
+				Containers: []apicommonv1.AgentContainerName{apicommonv1.CoreAgentContainerName, apicommonv1.ProcessAgentContainerName},
+			}
 		}
 
 		if orchestratorExplorer.Conf != nil {
@@ -220,7 +233,11 @@ func (f *orchestratorExplorerFeature) ManageClusterAgent(managers feature.PodTem
 // It should do nothing if the feature doesn't need to configure it.
 func (f *orchestratorExplorerFeature) ManageNodeAgent(managers feature.PodTemplateManagers) error {
 	for _, env := range f.getEnvVars() {
-		managers.EnvVar().AddEnvVarToContainer(apicommonv1.ProcessAgentContainerName, env)
+		if f.monoContainerEnabled {
+			managers.EnvVar().AddEnvVarToContainer(apicommonv1.NonPrivilegedMonoContainerName, env)
+		} else {
+			managers.EnvVar().AddEnvVarToContainer(apicommonv1.ProcessAgentContainerName, env)
+		}
 	}
 
 	return nil

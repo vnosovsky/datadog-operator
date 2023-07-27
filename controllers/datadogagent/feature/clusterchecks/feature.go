@@ -60,6 +60,7 @@ func (f *clusterChecksFeature) ID() feature.IDType {
 func (f *clusterChecksFeature) Configure(dda *v2alpha1.DatadogAgent) feature.RequiredComponents {
 	clusterChecksEnabled := apiutils.BoolValue(dda.Spec.Features.ClusterChecks.Enabled)
 	f.useClusterCheckRunners = clusterChecksEnabled && apiutils.BoolValue(dda.Spec.Features.ClusterChecks.UseClusterChecksRunners)
+	f.owner = dda
 
 	{
 		hash, err := comparison.GenerateMD5ForSpec(dda.Spec.Features.ClusterChecks)
@@ -73,7 +74,6 @@ func (f *clusterChecksFeature) Configure(dda *v2alpha1.DatadogAgent) feature.Req
 	}
 
 	if clusterChecksEnabled {
-		f.owner = dda
 
 		if enabled, flavor := v2alpha1.IsNetworkPolicyEnabled(dda); enabled {
 			if flavor == v2alpha1.NetworkPolicyFlavorCilium {

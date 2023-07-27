@@ -33,7 +33,9 @@ func init() {
 }
 
 func buildDogstatsdFeature(options *feature.Options) feature.Feature {
-	dogstatsdFeat := &dogstatsdFeature{}
+	dogstatsdFeat := &dogstatsdFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return dogstatsdFeat
 }
@@ -54,6 +56,8 @@ type dogstatsdFeature struct {
 
 	createSCC bool
 	owner     metav1.Object
+
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -89,13 +93,24 @@ func (f *dogstatsdFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp featur
 
 	f.createSCC = v2alpha1.ShouldCreateSCC(dda, v2alpha1.NodeAgentComponentName)
 
-	reqComp = feature.RequiredComponents{
-		Agent: feature.RequiredComponent{
-			IsRequired: apiutils.NewBoolPointer(true),
-			Containers: []apicommonv1.AgentContainerName{
-				apicommonv1.CoreAgentContainerName,
+	if f.monoContainerEnabled {
+		reqComp = feature.RequiredComponents{
+			Agent: feature.RequiredComponent{
+				IsRequired: apiutils.NewBoolPointer(true),
+				Containers: []apicommonv1.AgentContainerName{
+					apicommonv1.NonPrivilegedMonoContainerName,
+				},
 			},
-		},
+		}
+	} else {
+		reqComp = feature.RequiredComponents{
+			Agent: feature.RequiredComponent{
+				IsRequired: apiutils.NewBoolPointer(true),
+				Containers: []apicommonv1.AgentContainerName{
+					apicommonv1.CoreAgentContainerName,
+				},
+			},
+		}
 	}
 	return reqComp
 }

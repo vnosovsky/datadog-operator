@@ -27,7 +27,9 @@ func init() {
 }
 
 func buildPrometheusScrapeFeature(options *feature.Options) feature.Feature {
-	prometheusScrapeFeat := &prometheusScrapeFeature{}
+	prometheusScrapeFeat := &prometheusScrapeFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return prometheusScrapeFeat
 }
@@ -36,6 +38,8 @@ type prometheusScrapeFeature struct {
 	enableServiceEndpoints bool
 	additionalConfigs      string
 	openmetricsVersion     int
+
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -59,19 +63,36 @@ func (f *prometheusScrapeFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp
 		if prometheusScrape.Version != nil {
 			f.openmetricsVersion = *prometheusScrape.Version
 		}
-		reqComp = feature.RequiredComponents{
-			Agent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.CoreAgentContainerName,
+		if f.monoContainerEnabled {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.NonPrivilegedMonoContainerName,
+					},
 				},
-			},
-			ClusterAgent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.ClusterAgentContainerName,
+				ClusterAgent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.ClusterAgentContainerName,
+					},
 				},
-			},
+			}
+		} else {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.CoreAgentContainerName,
+					},
+				},
+				ClusterAgent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.ClusterAgentContainerName,
+					},
+				},
+			}
 		}
 	}
 

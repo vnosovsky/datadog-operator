@@ -26,14 +26,17 @@ func init() {
 }
 
 func buildLiveProcessFeature(options *feature.Options) feature.Feature {
-	liveProcessFeat := &liveProcessFeature{}
+	liveProcessFeat := &liveProcessFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return liveProcessFeat
 }
 
 type liveProcessFeature struct {
-	scrubArgs *bool
-	stripArgs *bool
+	scrubArgs            *bool
+	stripArgs            *bool
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -50,15 +53,28 @@ func (f *liveProcessFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp feat
 		if dda.Spec.Features.LiveProcessCollection.StripProcessArguments != nil {
 			f.stripArgs = apiutils.NewBoolPointer(*dda.Spec.Features.LiveProcessCollection.StripProcessArguments)
 		}
-		reqComp = feature.RequiredComponents{
-			Agent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.CoreAgentContainerName,
-					apicommonv1.ProcessAgentContainerName,
+
+		if f.monoContainerEnabled {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.NonPrivilegedMonoContainerName,
+					},
 				},
-			},
+			}
+		} else {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.CoreAgentContainerName,
+						apicommonv1.ProcessAgentContainerName,
+					},
+				},
+			}
 		}
+
 	}
 
 	return reqComp
@@ -96,9 +112,16 @@ func (f *liveProcessFeature) ManageClusterAgent(managers feature.PodTemplateMana
 // ManageNodeAgent allows a feature to configure the Node Agent's corev1.PodTemplateSpec
 // It should do nothing if the feature doesn't need to configure it.
 func (f *liveProcessFeature) ManageNodeAgent(managers feature.PodTemplateManagers) error {
+	var agentName apicommonv1.AgentContainerName
+	if f.monoContainerEnabled {
+		agentName = apicommonv1.NonPrivilegedMonoContainerName
+	} else {
+		agentName = apicommonv1.ProcessAgentContainerName
+	}
+
 	// passwd volume mount
 	passwdVol, passwdVolMount := volume.GetVolumes(apicommon.PasswdVolumeName, apicommon.PasswdHostPath, apicommon.PasswdMountPath, true)
-	managers.VolumeMount().AddVolumeMountToContainer(&passwdVolMount, apicommonv1.ProcessAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&passwdVolMount, agentName)
 	managers.Volume().AddVolume(&passwdVol)
 
 	enableEnvVar := &corev1.EnvVar{
@@ -106,14 +129,14 @@ func (f *liveProcessFeature) ManageNodeAgent(managers feature.PodTemplateManager
 		Value: "true",
 	}
 
-	managers.EnvVar().AddEnvVarToContainer(apicommonv1.ProcessAgentContainerName, enableEnvVar)
+	managers.EnvVar().AddEnvVarToContainer(agentName, enableEnvVar)
 
 	if f.scrubArgs != nil {
 		scrubArgsEnvVar := &corev1.EnvVar{
 			Name:  apicommon.DDProcessConfigScrubArgs,
 			Value: apiutils.BoolToString(f.scrubArgs),
 		}
-		managers.EnvVar().AddEnvVarToContainer(apicommonv1.ProcessAgentContainerName, scrubArgsEnvVar)
+		managers.EnvVar().AddEnvVarToContainer(agentName, scrubArgsEnvVar)
 	}
 
 	if f.stripArgs != nil {
@@ -121,7 +144,7 @@ func (f *liveProcessFeature) ManageNodeAgent(managers feature.PodTemplateManager
 			Name:  apicommon.DDProcessConfigStripArgs,
 			Value: apiutils.BoolToString(f.stripArgs),
 		}
-		managers.EnvVar().AddEnvVarToContainer(apicommonv1.ProcessAgentContainerName, stripArgsEnvVar)
+		managers.EnvVar().AddEnvVarToContainer(agentName, stripArgsEnvVar)
 	}
 
 	return nil

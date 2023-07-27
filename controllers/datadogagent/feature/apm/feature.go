@@ -35,7 +35,9 @@ func init() {
 }
 
 func buildAPMFeature(options *feature.Options) feature.Feature {
-	apmFeat := &apmFeature{}
+	apmFeat := &apmFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return apmFeat
 }
@@ -56,6 +58,8 @@ type apmFeature struct {
 	createKubernetesNetworkPolicy bool
 	createCiliumNetworkPolicy     bool
 	createSCC                     bool
+
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -92,14 +96,25 @@ func (f *apmFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp feature.Requ
 
 		f.createSCC = v2alpha1.ShouldCreateSCC(dda, v2alpha1.NodeAgentComponentName)
 
-		reqComp = feature.RequiredComponents{
-			Agent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.CoreAgentContainerName,
-					apicommonv1.TraceAgentContainerName,
+		if f.monoContainerEnabled {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.NonPrivilegedMonoContainerName,
+					},
 				},
-			},
+			}
+		} else {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.CoreAgentContainerName,
+						apicommonv1.TraceAgentContainerName,
+					},
+				},
+			}
 		}
 	}
 

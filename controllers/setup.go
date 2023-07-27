@@ -39,6 +39,7 @@ type SetupOptions struct {
 	DatadogMonitorEnabled    bool
 	OperatorMetricsEnabled   bool
 	V2APIEnabled             bool
+	MonoContainerEnabled     bool
 }
 
 // ExtendedDaemonsetOptions defines ExtendedDaemonset options
@@ -132,6 +133,7 @@ func startDatadogAgent(logger logr.Logger, mgr manager.Manager, vInfo *version.I
 			SupportCilium:          options.SupportCilium,
 			OperatorMetricsEnabled: options.OperatorMetricsEnabled,
 			V2Enabled:              options.V2APIEnabled,
+			MonoContainerEnabled:   options.MonoContainerEnabled,
 		},
 	}).SetupWithManager(mgr)
 }

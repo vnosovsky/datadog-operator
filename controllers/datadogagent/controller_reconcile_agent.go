@@ -82,14 +82,17 @@ func (r *Reconciler) reconcileV2Agent(logger logr.Logger, requiredComponents fea
 	}
 
 	// Start by creating the Default Agent daemonset
-	daemonset = componentagent.NewDefaultAgentDaemonset(dda, requiredContainers)
+	daemonset = componentagent.NewDefaultAgentDaemonset(dda, requiredContainers, r.options.MonoContainerEnabled)
 	podManagers = feature.NewPodTemplateManagers(&daemonset.Spec.Template)
+	logger.Info("MONOCONTAINER: reconcileV2Agent", "daemonset", daemonset)
 
 	// Set Global setting on the default daemonset
-	daemonset.Spec.Template = *override.ApplyGlobalSettings(logger, podManagers, dda, resourcesManager, datadoghqv2alpha1.NodeAgentComponentName)
+	daemonset.Spec.Template = *override.ApplyGlobalSettingsMonoSupport(logger, podManagers, dda, resourcesManager,
+		datadoghqv2alpha1.NodeAgentComponentName, r.options.MonoContainerEnabled)
 
 	// Apply features changes on the Deployment.Spec.Template
 	for _, feat := range features {
+		logger.Info("MONOCONTAINER: reconcileV2Agent manage", "featureID", feat.ID())
 		if errFeat := feat.ManageNodeAgent(podManagers); errFeat != nil {
 			return result, errFeat
 		}

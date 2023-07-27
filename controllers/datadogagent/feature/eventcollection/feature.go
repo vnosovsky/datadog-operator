@@ -28,15 +28,18 @@ func init() {
 }
 
 func buildEventCollectionFeature(options *feature.Options) feature.Feature {
-	eventCollectionFeat := &eventCollectionFeature{}
+	eventCollectionFeat := &eventCollectionFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return eventCollectionFeat
 }
 
 type eventCollectionFeature struct {
-	serviceAccountName string
-	rbacSuffix         string
-	owner              metav1.Object
+	serviceAccountName   string
+	rbacSuffix           string
+	owner                metav1.Object
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -152,9 +155,13 @@ func (f *eventCollectionFeature) ManageNodeAgent(managers feature.PodTemplateMan
 		Value: "true",
 	})
 
+	leaderElectionEnabled := "true"
+	if f.monoContainerEnabled {
+		leaderElectionEnabled = "false"
+	}
 	managers.EnvVar().AddEnvVarToContainer(apicommonv1.CoreAgentContainerName, &corev1.EnvVar{
 		Name:  apicommon.DDLeaderElection,
-		Value: "true",
+		Value: leaderElectionEnabled,
 	})
 
 	managers.EnvVar().AddEnvVarToContainer(apicommonv1.CoreAgentContainerName, &corev1.EnvVar{

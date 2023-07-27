@@ -38,7 +38,10 @@ func init() {
 }
 
 func buildOTLPFeature(options *feature.Options) feature.Feature {
-	otlpFeat := &otlpFeature{logger: options.Logger}
+	otlpFeat := &otlpFeature{
+		logger:               options.Logger,
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return otlpFeat
 }
@@ -58,6 +61,8 @@ type otlpFeature struct {
 	localServiceName        string
 
 	owner metav1.Object
+
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature
@@ -93,18 +98,35 @@ func (f *otlpFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp feature.Req
 	}
 	f.localServiceName = v2alpha1.GetLocalAgentServiceName(dda)
 
-	if f.grpcEnabled || f.httpEnabled {
-		reqComp = feature.RequiredComponents{
-			Agent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.CoreAgentContainerName,
+	if f.monoContainerEnabled {
+		if f.grpcEnabled || f.httpEnabled {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.NonPrivilegedMonoContainerName,
+					},
 				},
-			},
+			}
+			// if using APM, require the Trace Agent too.
+			// if f.usingAPM {
+			// 	reqComp.Agent.Containers = append(reqComp.Agent.Containers, apicommonv1.NonPrivilegedMonoContainerName)
+			// }
 		}
-		// if using APM, require the Trace Agent too.
-		if f.usingAPM {
-			reqComp.Agent.Containers = append(reqComp.Agent.Containers, apicommonv1.TraceAgentContainerName)
+	} else {
+		if f.grpcEnabled || f.httpEnabled {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.CoreAgentContainerName,
+					},
+				},
+			}
+			// if using APM, require the Trace Agent too.
+			if f.usingAPM {
+				reqComp.Agent.Containers = append(reqComp.Agent.Containers, apicommonv1.TraceAgentContainerName)
+			}
 		}
 	}
 

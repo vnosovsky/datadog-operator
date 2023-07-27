@@ -134,8 +134,8 @@ type Feature interface {
 // Options option that can be pass to the Interface.Configure function
 type Options struct {
 	SupportExtendedDaemonset bool
-
-	Logger logr.Logger
+	MonoContainerEnabled     bool
+	Logger                   logr.Logger
 }
 
 // BuildFunc function type used by each Feature during its factory registration.

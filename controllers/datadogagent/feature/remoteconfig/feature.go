@@ -35,6 +35,7 @@ func buildRCFeature(options *feature.Options) feature.Feature {
 
 	if options != nil {
 		rcFeat.logger = options.Logger
+		rcFeat.monoContainerEnabled = options.MonoContainerEnabled
 	}
 
 	return rcFeat
@@ -45,6 +46,8 @@ type rcFeature struct {
 	logger logr.Logger
 
 	enabled bool
+
+	monoContainerEnabled bool
 }
 
 // ID returns the ID of the Feature

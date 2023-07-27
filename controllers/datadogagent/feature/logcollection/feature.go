@@ -28,7 +28,9 @@ func init() {
 }
 
 func buildLogCollectionFeature(options *feature.Options) feature.Feature {
-	logCollectionFeat := &logCollectionFeature{}
+	logCollectionFeat := &logCollectionFeature{
+		monoContainerEnabled: options.MonoContainerEnabled,
+	}
 
 	return logCollectionFeat
 }
@@ -41,6 +43,7 @@ type logCollectionFeature struct {
 	containerSymlinksPath      string
 	tempStoragePath            string
 	openFilesLimit             int32
+	monoContainerEnabled       bool
 }
 
 // ID returns the ID of the Feature
@@ -70,13 +73,24 @@ func (f *logCollectionFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp fe
 			f.openFilesLimit = *logCollection.OpenFilesLimit
 		}
 
-		reqComp = feature.RequiredComponents{
-			Agent: feature.RequiredComponent{
-				IsRequired: apiutils.NewBoolPointer(true),
-				Containers: []apicommonv1.AgentContainerName{
-					apicommonv1.CoreAgentContainerName,
+		if f.monoContainerEnabled {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.NonPrivilegedMonoContainerName,
+					},
 				},
-			},
+			}
+		} else {
+			reqComp = feature.RequiredComponents{
+				Agent: feature.RequiredComponent{
+					IsRequired: apiutils.NewBoolPointer(true),
+					Containers: []apicommonv1.AgentContainerName{
+						apicommonv1.CoreAgentContainerName,
+					},
+				},
+			}
 		}
 	}
 	return reqComp
@@ -128,41 +142,48 @@ func (f *logCollectionFeature) ManageClusterAgent(managers feature.PodTemplateMa
 // ManageNodeAgent allows a feature to configure the Node Agent's corev1.PodTemplateSpec
 // It should do nothing if the feature doesn't need to configure it.
 func (f *logCollectionFeature) ManageNodeAgent(managers feature.PodTemplateManagers) error {
+	var agentName apicommonv1.AgentContainerName
+	if f.monoContainerEnabled {
+		agentName = apicommonv1.NonPrivilegedMonoContainerName
+	} else {
+		agentName = apicommonv1.ProcessAgentContainerName
+	}
+
 	// pointerdir volume mount
 	pointerVol, pointerVolMount := volume.GetVolumes(apicommon.PointerVolumeName, f.tempStoragePath, apicommon.PointerVolumePath, false)
-	managers.VolumeMount().AddVolumeMountToContainer(&pointerVolMount, apicommonv1.CoreAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&pointerVolMount, agentName)
 	managers.Volume().AddVolume(&pointerVol)
 
 	// pod logs volume mount
 	podLogVol, podLogVolMount := volume.GetVolumes(apicommon.PodLogVolumeName, f.podLogsPath, apicommon.PodLogVolumePath, true)
-	managers.VolumeMount().AddVolumeMountToContainer(&podLogVolMount, apicommonv1.CoreAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&podLogVolMount, agentName)
 	managers.Volume().AddVolume(&podLogVol)
 
 	// container logs volume mount
 	containerLogVol, containerLogVolMount := volume.GetVolumes(apicommon.ContainerLogVolumeName, f.containerLogsPath, apicommon.ContainerLogVolumePath, true)
-	managers.VolumeMount().AddVolumeMountToContainer(&containerLogVolMount, apicommonv1.CoreAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&containerLogVolMount, agentName)
 	managers.Volume().AddVolume(&containerLogVol)
 
 	// symlink volume mount
 	symlinkVol, symlinkVolMount := volume.GetVolumes(apicommon.SymlinkContainerVolumeName, f.containerSymlinksPath, apicommon.SymlinkContainerVolumePath, true)
-	managers.VolumeMount().AddVolumeMountToContainer(&symlinkVolMount, apicommonv1.CoreAgentContainerName)
+	managers.VolumeMount().AddVolumeMountToContainer(&symlinkVolMount, agentName)
 	managers.Volume().AddVolume(&symlinkVol)
 
 	// envvars
-	managers.EnvVar().AddEnvVarToContainer(apicommonv1.CoreAgentContainerName, &corev1.EnvVar{
+	managers.EnvVar().AddEnvVarToContainer(agentName, &corev1.EnvVar{
 		Name:  apicommon.DDLogsEnabled,
 		Value: "true",
 	})
-	managers.EnvVar().AddEnvVarToContainer(apicommonv1.CoreAgentContainerName, &corev1.EnvVar{
+	managers.EnvVar().AddEnvVarToContainer(agentName, &corev1.EnvVar{
 		Name:  apicommon.DDLogsConfigContainerCollectAll,
 		Value: strconv.FormatBool(f.containerCollectAll),
 	})
-	managers.EnvVar().AddEnvVarToContainer(apicommonv1.CoreAgentContainerName, &corev1.EnvVar{
+	managers.EnvVar().AddEnvVarToContainer(agentName, &corev1.EnvVar{
 		Name:  apicommon.DDLogsContainerCollectUsingFiles,
 		Value: strconv.FormatBool(f.containerCollectUsingFiles),
 	})
 	if f.openFilesLimit != 0 {
-		managers.EnvVar().AddEnvVarToContainer(apicommonv1.CoreAgentContainerName, &corev1.EnvVar{
+		managers.EnvVar().AddEnvVarToContainer(agentName, &corev1.EnvVar{
 			Name:  apicommon.DDLogsConfigOpenFilesLimit,
 			Value: strconv.FormatInt(int64(f.openFilesLimit), 10),
 		})

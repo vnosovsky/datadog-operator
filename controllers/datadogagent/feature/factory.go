@@ -12,6 +12,7 @@ import (
 
 	"github.com/DataDog/datadog-operator/apis/datadoghq/v1alpha1"
 	"github.com/DataDog/datadog-operator/apis/datadoghq/v2alpha1"
+	"github.com/go-logr/logr"
 )
 
 func init() {
@@ -31,7 +32,7 @@ func Register(id IDType, buildFunc BuildFunc) error {
 }
 
 // BuildFeatures use to build a list features depending of the v2alpha1.DatadogAgent instance
-func BuildFeatures(dda *v2alpha1.DatadogAgent, options *Options) ([]Feature, RequiredComponents) {
+func BuildFeatures(logger *logr.Logger, dda *v2alpha1.DatadogAgent, options *Options) ([]Feature, RequiredComponents) {
 	builderMutex.RLock()
 	defer builderMutex.RUnlock()
 
@@ -50,6 +51,10 @@ func BuildFeatures(dda *v2alpha1.DatadogAgent, options *Options) ([]Feature, Req
 	for _, id := range sortedkeys {
 		feat := featureBuilders[id](options)
 		reqComponents := feat.Configure(dda)
+		if logger != nil {
+			logger.Info("MONOCONTAINER: factory.BuildFeatures", "featureId", id, "reqComponents",
+				reqComponents, "options.MonoContainerEnabled", options.MonoContainerEnabled)
+		}
 		// only add feature to the output if one of the components is configured (but not necessarily required)
 		if reqComponents.IsConfigured() {
 			output = append(output, feat)
