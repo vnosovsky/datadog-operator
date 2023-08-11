@@ -101,7 +101,6 @@ type options struct {
 	leaderElectionLeaseDuration time.Duration
 
 	// Controllers options
-	supportExtendedDaemonset      bool
 	edsMaxPodUnavailable          string
 	edsMaxPodSchedulerFailure     string
 	edsCanaryDuration             time.Duration
@@ -117,6 +116,7 @@ type options struct {
 	webhookEnabled                bool
 	v2APIEnabled                  bool
 	maximumGoroutines             int
+	monoContainerEnabled          bool
 
 	// Secret Backend options
 	secretBackendCommand string
@@ -133,7 +133,7 @@ func (opts *options) Parse() {
 	flag.BoolVar(&opts.pprofActive, "pprof", false, "Enable pprof endpoint")
 
 	// Leader Election options flags
-	flag.BoolVar(&opts.enableLeaderElection, "enable-leader-election", true,
+	flag.BoolVar(&opts.enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&opts.leaderElectionResourceLock, "leader-election-resource", resourcelock.ConfigMapsLeasesResourceLock, "determines which resource lock to use for leader election. option:[configmapsleases|endpointsleases|leases]")
 	flag.DurationVar(&opts.leaderElectionLeaseDuration, "leader-election-lease-duration", 60*time.Second, "Define LeaseDuration as well as RenewDeadline (leaseDuration / 2) and RetryPeriod (leaseDuration / 4)")
@@ -150,7 +150,7 @@ func (opts *options) Parse() {
 	flag.IntVar(&opts.maximumGoroutines, "maximumGoroutines", defaultMaximumGoroutines, "Override health check threshold for maximum number of goroutines.")
 
 	// ExtendedDaemonset configuration
-	flag.BoolVar(&opts.supportExtendedDaemonset, "supportExtendedDaemonset", false, "Support usage of Datadog ExtendedDaemonset CRD.")
+	flag.BoolVar(&opts.monoContainerEnabled, "supportExtendedDaemonset", false, "Support usage of Datadog ExtendedDaemonset CRD.")
 	flag.StringVar(&opts.edsMaxPodUnavailable, "edsMaxPodUnavailable", "", "ExtendedDaemonset number of max unavailable pods during the rolling update")
 	flag.StringVar(&opts.edsMaxPodSchedulerFailure, "edsMaxPodSchedulerFailure", "", "ExtendedDaemonset number of max pod scheduler failures")
 	flag.DurationVar(&opts.edsCanaryDuration, "edsCanaryDuration", 10*time.Minute, "ExtendedDaemonset canary duration")
@@ -237,10 +237,10 @@ func run(opts *options) error {
 	if err != nil && opts.datadogMonitorEnabled {
 		return setupErrorf(setupLog, err, "Unable to get credentials for DatadogMonitor")
 	}
-
+	setupLog.Info("MONOCONTAINER main", "opts.monoContainerEnabled", opts.monoContainerEnabled)
 	options := controllers.SetupOptions{
 		SupportExtendedDaemonset: controllers.ExtendedDaemonsetOptions{
-			Enabled:                    opts.supportExtendedDaemonset,
+			Enabled:                    false,
 			MaxPodUnavailable:          opts.edsMaxPodUnavailable,
 			CanaryDuration:             opts.edsCanaryDuration,
 			CanaryReplicas:             opts.edsCanaryReplicas,
@@ -256,12 +256,14 @@ func run(opts *options) error {
 		DatadogMonitorEnabled:  opts.datadogMonitorEnabled,
 		OperatorMetricsEnabled: opts.operatorMetricsEnabled,
 		V2APIEnabled:           opts.v2APIEnabled,
+		MonoContainerEnabled:   opts.monoContainerEnabled,
 	}
 
 	if err = controllers.SetupControllers(setupLog, mgr, options); err != nil {
 		return setupErrorf(setupLog, err, "Unable to start controllers")
 	}
 
+	opts.webhookEnabled = false
 	if opts.webhookEnabled && opts.datadogAgentEnabled {
 		if err = (&datadoghqv2alpha1.DatadogAgent{}).SetupWebhookWithManager(mgr); err != nil {
 			return setupErrorf(setupLog, err, "unable to create webhook", "webhook", "DatadogAgent")

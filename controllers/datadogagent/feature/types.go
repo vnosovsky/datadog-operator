@@ -6,6 +6,7 @@
 package feature
 
 import (
+	"github.com/DataDog/datadog-operator/apis/datadoghq/common/v1"
 	apicommonv1 "github.com/DataDog/datadog-operator/apis/datadoghq/common/v1"
 	"github.com/DataDog/datadog-operator/apis/datadoghq/v1alpha1"
 	"github.com/DataDog/datadog-operator/apis/datadoghq/v2alpha1"
@@ -63,6 +64,27 @@ func (rc *RequiredComponent) IsEnabled() bool {
 // IsConfigured returns true if the Feature does not require the RequiredComponent, but if it runs it needs to be configured appropriately.
 func (rc *RequiredComponent) IsConfigured() bool {
 	return rc.IsRequired != nil || len(rc.Containers) > 0
+}
+
+// IsPrivileged indicates whether component requires privileged access, e.g. for system-proble or sec agent containers
+func (rc *RequiredComponent) IsPrivileged(logger *logr.Logger) bool {
+	for _, container := range rc.Containers {
+		logger.Info("MONOCONTAINER: RequiredComponent.IsPrivileged", "containerName", container)
+		if container == common.SecurityAgentContainerName || container == common.SystemProbeContainerName {
+			logger.Info("MONOCONTAINER: IsPrivileged true")
+			return true
+		}
+	}
+	logger.Info("MONOCONTAINER: IsPrivileged false")
+	return false
+}
+
+func (rc *RequiredComponents) UsesCoreAgentMonoContainer(logger *logr.Logger) bool {
+	useMono := len(rc.Agent.Containers) == 1 &&
+		rc.Agent.Containers[0] == apicommonv1.NonPrivilegedMonoContainerName
+	logger.Info("MONOCONTAINER: RequiredComponents.UsesCoreAgentMonoContainer", "useMono", useMono, "rc.Agent.Containers", rc.Agent.Containers)
+	return len(rc.Agent.Containers) == 1 &&
+		rc.Agent.Containers[0] == apicommonv1.NonPrivilegedMonoContainerName
 }
 
 // Merge use to merge 2 RequiredComponents
@@ -126,6 +148,10 @@ type Feature interface {
 	// ManageNodeAget allows a feature to configure the Node Agent's corev1.PodTemplateSpec
 	// It should do nothing if the feature doesn't need to configure it.
 	ManageNodeAgent(managers PodTemplateManagers) error
+	// ManageMonoContainerNodeAgent allows a feature to configure the mono-container Node Agent's corev1.PodTemplateSpec
+	// if mono-container usage is enabled and can be used with the current feature set
+	// It should do nothing if the feature doesn't need to configure it.
+	ManageMonoContainerNodeAgent(managers PodTemplateManagers) error
 	// ManageClusterChecksRunner allows a feature to configure the ClusterChecksRunnerAgent's corev1.PodTemplateSpec
 	// It should do nothing if the feature doesn't need to configure it.
 	ManageClusterChecksRunner(managers PodTemplateManagers) error
@@ -134,8 +160,8 @@ type Feature interface {
 // Options option that can be pass to the Interface.Configure function
 type Options struct {
 	SupportExtendedDaemonset bool
-
-	Logger logr.Logger
+	MonoContainerEnabled     bool
+	Logger                   logr.Logger
 }
 
 // BuildFunc function type used by each Feature during its factory registration.

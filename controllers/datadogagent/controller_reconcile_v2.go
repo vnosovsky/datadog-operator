@@ -94,7 +94,12 @@ func (r *Reconciler) reconcileInstanceV2(ctx context.Context, logger logr.Logger
 	var result reconcile.Result
 	newStatus := instance.Status.DeepCopy()
 
-	features, requiredComponents := feature.BuildFeatures(instance, reconcilerOptionsToFeatureOptions(&r.options, logger))
+	logger.Info("MONOCONTAINER: reconcileInstanceV2 feature.BuildFeatures", "r.options.MonoContainerEnabled", r.options.MonoContainerEnabled)
+	featureOptions := reconcilerOptionsToFeatureOptions(&r.options, logger)
+	features, requiredComponents := feature.BuildFeatures(&logger, instance, featureOptions)
+	//r.options.MonoContainerEnabled = featureOptions.MonoContainerEnabled
+	logger.Info("MONOCONTAINER: reconcileInstanceV2 feature.BuildFeatures", "requiredComponents", requiredComponents,
+		"r.options.MonoContainerEnabled", r.options.MonoContainerEnabled)
 	// update list of enabled features for metrics forwarder
 	r.updateMetricsForwardersFeatures(instance, features)
 

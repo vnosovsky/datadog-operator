@@ -67,6 +67,7 @@ type ReconcilerOptions struct {
 	SupportCilium            bool
 	OperatorMetricsEnabled   bool
 	V2Enabled                bool
+	MonoContainerEnabled     bool
 }
 
 // Reconciler is the internal reconciler for Datadog Agent
@@ -160,6 +161,7 @@ func (r *Reconciler) internalReconcile(ctx context.Context, request reconcile.Re
 func reconcilerOptionsToFeatureOptions(opts *ReconcilerOptions, logger logr.Logger) *feature.Options {
 	return &feature.Options{
 		SupportExtendedDaemonset: opts.ExtendedDaemonsetOptions.Enabled,
+		MonoContainerEnabled:     opts.MonoContainerEnabled,
 		Logger:                   logger,
 	}
 }

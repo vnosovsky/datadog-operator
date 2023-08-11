@@ -10,8 +10,10 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/DataDog/datadog-operator/apis/datadoghq/common/v1"
 	"github.com/DataDog/datadog-operator/apis/datadoghq/v1alpha1"
 	"github.com/DataDog/datadog-operator/apis/datadoghq/v2alpha1"
+	"github.com/go-logr/logr"
 )
 
 func init() {
@@ -31,7 +33,7 @@ func Register(id IDType, buildFunc BuildFunc) error {
 }
 
 // BuildFeatures use to build a list features depending of the v2alpha1.DatadogAgent instance
-func BuildFeatures(dda *v2alpha1.DatadogAgent, options *Options) ([]Feature, RequiredComponents) {
+func BuildFeatures(logger *logr.Logger, dda *v2alpha1.DatadogAgent, options *Options) ([]Feature, RequiredComponents) {
 	builderMutex.RLock()
 	defer builderMutex.RUnlock()
 
@@ -56,7 +58,31 @@ func BuildFeatures(dda *v2alpha1.DatadogAgent, options *Options) ([]Feature, Req
 		}
 		requiredComponents.Merge(&reqComponents)
 	}
+	if logger != nil {
+		logger.Info("MONOCONTAINER: factory.BuildFeatures", "merged.requiredComponents", requiredComponents,
+			"options.MonoContainerEnabled", options.MonoContainerEnabled)
+	}
 
+	if options.MonoContainerEnabled {
+
+		requiresPrivilegedContainer := /* *requiredComponents.Agent.IsRequired && */ requiredComponents.Agent.IsPrivileged(logger)
+		if logger != nil {
+			logger.Info("MONOCONTAINER: factory.BuildFeatures check and update container list",
+				"*requiredComponents.Agent.IsRequired", *requiredComponents.Agent.IsRequired,
+				"requiredComponents.Agent.IsPrivileged", requiredComponents.Agent.IsPrivileged(logger))
+
+			logger.Info("MONOCONTAINER: factory.BuildFeatures merged requiredComponents",
+				"requiresPrivilegedContainer", requiresPrivilegedContainer,
+				"requiredComponents.Agent.Container", requiredComponents.Agent.Containers)
+		}
+
+		if requiresPrivilegedContainer {
+			return output, requiredComponents
+		} else {
+			requiredComponents.Agent.Containers = []common.AgentContainerName{common.NonPrivilegedMonoContainerName}
+			return output, requiredComponents
+		}
+	}
 	return output, requiredComponents
 }
 

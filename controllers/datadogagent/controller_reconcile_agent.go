@@ -80,18 +80,32 @@ func (r *Reconciler) reconcileV2Agent(logger logr.Logger, requiredComponents fea
 		}
 		return r.createOrUpdateExtendedDaemonset(daemonsetLogger, dda, eds, newStatus, updateEDSStatusV2WithAgent)
 	}
-
+	logger.Info("MONOCONTAINER: reconcileV2Agent l84")
 	// Start by creating the Default Agent daemonset
-	daemonset = componentagent.NewDefaultAgentDaemonset(dda, requiredContainers)
+	daemonset = componentagent.NewDefaultAgentDaemonset(logger, dda, requiredContainers, requiredComponents.UsesCoreAgentMonoContainer(&r.log))
 	podManagers = feature.NewPodTemplateManagers(&daemonset.Spec.Template)
+	logger.Info("MONOCONTAINER: reconcileV2Agent", "daemonset.spec.containers", daemonset.Spec.Template.Spec.Containers)
 
+	logger.Info("MONOCONTAINER: reconcileV2Agent l90")
 	// Set Global setting on the default daemonset
-	daemonset.Spec.Template = *override.ApplyGlobalSettings(logger, podManagers, dda, resourcesManager, datadoghqv2alpha1.NodeAgentComponentName)
+	daemonset.Spec.Template = *override.ApplyGlobalSettingsMonoSupport(logger, podManagers, dda, resourcesManager,
+		datadoghqv2alpha1.NodeAgentComponentName, requiredComponents.UsesCoreAgentMonoContainer(&r.log))
 
+	logger.Info("MONOCONTAINER: reconcileV2Agent l95")
 	// Apply features changes on the Deployment.Spec.Template
 	for _, feat := range features {
-		if errFeat := feat.ManageNodeAgent(podManagers); errFeat != nil {
-			return result, errFeat
+		logger.Info("MONOCONTAINER: reconcileV2Agent manage", "featureID", feat.ID())
+
+		if requiredComponents.UsesCoreAgentMonoContainer(&r.log) {
+			if errFeat := feat.ManageMonoContainerNodeAgent(podManagers); errFeat != nil {
+				logger.Info("MONOCONTAINER: reconcileV2Agent ManageMonoContainerNodeAgent l102", "errFeat", errFeat)
+				return result, errFeat
+			}
+		} else {
+			if errFeat := feat.ManageNodeAgent(podManagers); errFeat != nil {
+				logger.Info("MONOCONTAINER: reconcileV2Agent ManageNodeAgent l103", "errFeat", errFeat)
+				return result, errFeat
+			}
 		}
 	}
 
@@ -115,9 +129,11 @@ func (r *Reconciler) reconcileV2Agent(logger logr.Logger, requiredComponents fea
 				"Agent component is set to disabled",
 				true,
 			)
+			logger.Info("MONOCONTAINER: reconcileV2Agent l95")
 		}
 		return r.cleanupV2DaemonSet(daemonsetLogger, dda, daemonset, newStatus)
 	}
+	logger.Info("MONOCONTAINER: reconcileV2Agent l129")
 	return r.createOrUpdateDaemonset(daemonsetLogger, dda, daemonset, newStatus, updateDSStatusV2WithAgent)
 }
 

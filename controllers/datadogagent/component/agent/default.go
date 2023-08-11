@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	edsv1alpha1 "github.com/DataDog/extendeddaemonset/api/v1alpha1"
+	"github.com/go-logr/logr"
 
 	apicommon "github.com/DataDog/datadog-operator/apis/datadoghq/common"
 	"github.com/DataDog/datadog-operator/apis/datadoghq/common/v1"
@@ -26,11 +27,19 @@ import (
 )
 
 // NewDefaultAgentDaemonset return a new default agent DaemonSet
-func NewDefaultAgentDaemonset(dda metav1.Object, requiredContainers []common.AgentContainerName) *appsv1.DaemonSet {
+func NewDefaultAgentDaemonset(logger logr.Logger, dda metav1.Object, requiredContainers []common.AgentContainerName, usesCoreAgentMonoContainer bool) *appsv1.DaemonSet {
 	daemonset := NewDaemonset(dda, apicommon.DefaultAgentResourceSuffix, component.GetAgentName(dda), component.GetAgentVersion(dda), nil)
-	podTemplate := NewDefaultAgentPodTemplateSpec(dda, requiredContainers, daemonset.GetLabels())
+	logger.Info("MONOCONTAINER NewDefaultAgentDaemonset", "usesCoreAgentMonoContainer", usesCoreAgentMonoContainer, "requiredContainers", requiredContainers)
+	if usesCoreAgentMonoContainer {
+		logger.Info("MONOCONTAINER NewDefaultMonoContainerAgentPodTemplateSpec")
+		podTemplate := NewDefaultMonoContainerAgentPodTemplateSpec(dda, requiredContainers, daemonset.GetLabels())
+		daemonset.Spec.Template = *podTemplate
+	} else {
+		logger.Info("MONOCONTAINER NewDefaultAgentPodTemplateSpec")
+		podTemplate := NewDefaultAgentPodTemplateSpec(dda, requiredContainers, daemonset.GetLabels())
+		daemonset.Spec.Template = *podTemplate
+	}
 
-	daemonset.Spec.Template = *podTemplate
 	return daemonset
 }
 
@@ -39,6 +48,26 @@ func NewDefaultAgentExtendedDaemonset(dda metav1.Object, edsOptions *ExtendedDae
 	edsDaemonset := NewExtendedDaemonset(dda, edsOptions, apicommon.DefaultAgentResourceSuffix, component.GetAgentName(dda), component.GetAgentVersion(dda), nil)
 	edsDaemonset.Spec.Template = *NewDefaultAgentPodTemplateSpec(dda, requiredContainers, edsDaemonset.GetLabels())
 	return edsDaemonset
+}
+
+// NewDefaultAgentPodTemplateSpec return a default node agent for the cluster-agent deployment
+func NewDefaultMonoContainerAgentPodTemplateSpec(dda metav1.Object, requiredContainers []common.AgentContainerName, labels map[string]string) *corev1.PodTemplateSpec {
+	return &corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      labels,
+			Annotations: make(map[string]string),
+		},
+		Spec: corev1.PodSpec{
+			// Force root user for when the agent Dockerfile will be updated to use a non-root user by default
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser: apiutils.NewInt64Pointer(0),
+			},
+			ServiceAccountName: getDefaultServiceAccountName(dda),
+			// InitContainers:     initContainers(dda, requiredContainers),
+			Containers: agentMonoContainer(dda, requiredContainers),
+			Volumes:    volumesForAgent(dda, requiredContainers),
+		},
+	}
 }
 
 // NewDefaultAgentPodTemplateSpec return a default node agent for the cluster-agent deployment
@@ -99,6 +128,21 @@ func initContainers(dda metav1.Object, requiredContainers []common.AgentContaine
 	return initContainers
 }
 
+func agentMonoContainer(dda metav1.Object, requiredContainers []common.AgentContainerName) []corev1.Container {
+	monoContainer := corev1.Container{
+		Name:           string(common.NonPrivilegedMonoContainerName),
+		Image:          agentImage(),
+		Env:            envVarsForCoreAgent(dda, true),
+		VolumeMounts:   volumeMountsForCoreAgent(),
+		LivenessProbe:  apicommon.GetDefaultLivenessProbe(),
+		ReadinessProbe: apicommon.GetDefaultReadinessProbe(),
+	}
+
+	containers := []corev1.Container{monoContainer}
+
+	return containers
+}
+
 func agentContainers(dda metav1.Object, requiredContainers []common.AgentContainerName) []corev1.Container {
 	containers := []corev1.Container{coreAgentContainer(dda)}
 
@@ -125,7 +169,7 @@ func coreAgentContainer(dda metav1.Object) corev1.Container {
 		Name:           string(common.CoreAgentContainerName),
 		Image:          agentImage(),
 		Command:        []string{"agent", "run"},
-		Env:            envVarsForCoreAgent(dda),
+		Env:            envVarsForCoreAgent(dda, false),
 		VolumeMounts:   volumeMountsForCoreAgent(),
 		LivenessProbe:  apicommon.GetDefaultLivenessProbe(),
 		ReadinessProbe: apicommon.GetDefaultReadinessProbe(),
@@ -222,7 +266,7 @@ func initConfigContainer(dda metav1.Object) corev1.Container {
 			"for script in $(find /etc/cont-init.d/ -type f -name '*.sh' | sort) ; do bash $script ; done",
 		},
 		VolumeMounts: volumeMountsForInitConfig(),
-		Env:          envVarsForCoreAgent(dda),
+		Env:          envVarsForCoreAgent(dda, false),
 	}
 }
 
@@ -268,7 +312,11 @@ func commonEnvVars(dda metav1.Object) []corev1.EnvVar {
 	}
 }
 
-func envVarsForCoreAgent(dda metav1.Object) []corev1.EnvVar {
+func envVarsForCoreAgent(dda metav1.Object, usesCoreAgentMonoContainer bool) []corev1.EnvVar {
+	leaderElectionEnabled := "true"
+	if usesCoreAgentMonoContainer {
+		leaderElectionEnabled = "false"
+	}
 	envs := []corev1.EnvVar{
 		{
 			Name:  apicommon.DDHealthPort,
@@ -276,7 +324,7 @@ func envVarsForCoreAgent(dda metav1.Object) []corev1.EnvVar {
 		},
 		{
 			Name:  apicommon.DDLeaderElection,
-			Value: "true",
+			Value: leaderElectionEnabled,
 		},
 	}
 

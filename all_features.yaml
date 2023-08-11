@@ -1,0 +1,58 @@
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog-agent
+spec:
+  global:
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+      appSecret:
+        secretName: datadog-secret
+        keyName: app-key
+    clusterName: kind-operator-qa-mono
+    kubelet:
+      tlsVerify: false
+# ok means pods starting
+# nok means pod start error, clb 
+  features:
+    admissionController:
+      enabled: true           # ok
+    apm:
+      enabled: true           # ok
+    clusterChecks:
+      enabled: true           # nok false
+    cspm:                     
+      enabled: true           # ok  !
+    cws:                      
+      enabled: true           # ok  !
+    dogstatsd:
+      originDetectionEnabled: true  # ok
+    eventCollection:
+      collectKubernetesEvents: false # bug
+    externalMetricsServer:    
+      enabled: true           # ok
+    kubeStateMetricsCore:     
+      enabled: true           # ok
+    liveContainerCollection:  
+      enabled: true           # ok
+    liveProcessCollection:    
+      enabled: true           # ok
+    logCollection:            
+      enabled: true           # ok
+    npm:
+      enabled: true           # ok !
+    oomKill:
+      enabled: false          # nok true ! kdp -> Error: failed to generate container "387e36434c764fd960cd69a32494d358c3f62ff7f133c45d0e6e3559138a6d13" spec: failed to generate spec: failed to mkdir "/usr/src": mkdir /usr/src: read-only file system
+    orchestratorExplorer:
+      enabled: true         # ok
+    # otlp:
+    prometheusScrape:
+      enabled: true         # ok
+    #remoteConfiguration:
+    #  enabled: false
+    tcpQueueLength:
+      enabled: true        # nok true ! kdp -> Error: failed to generate container "6ae91de7c13d7e2700fe795ea8814825300c58d976df6605d1abffbfabf70aea" spec: failed to generate spec: failed to mkdir "/usr/src": mkdir /usr/src: read-only file system
+    usm:
+      enabled: true         # ok !
