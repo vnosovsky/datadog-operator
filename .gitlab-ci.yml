@@ -374,8 +374,8 @@ submit_preflight_redhat_public_tag:
     - if: $CI_COMMIT_TAG
       when: manual
     - when: manual
-  needs:
-    - "publish_redhat_public_tag"
+  # needs:
+  #   - "publish_redhat_public_tag"
   tags: ["runner:docker", "size:large"]
   image: $JOB_DOCKER_IMAGE
   script:
@@ -392,8 +392,8 @@ publish_community_operators:
       - if: $CI_COMMIT_TAG
         when: manual
       - when: manual
-  # needs:
-  #   - "submit_preflight_redhat_public_tag"
+  needs:
+    - "submit_preflight_redhat_public_tag"
   tags: [ "runner:docker", "size:large" ]
   image: $JOB_DOCKER_IMAGE
   before_script:
