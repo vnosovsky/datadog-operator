@@ -34,6 +34,9 @@ type admissionControllerFeature struct {
 	localServiceName       string
 	failurePolicy          string
 
+	cwsInstrumentationEnabled bool
+	cwsInstrumentationMode    string
+
 	serviceAccountName string
 	owner              metav1.Object
 }
@@ -83,6 +86,11 @@ func (f *admissionControllerFeature) Configure(dda *v2alpha1.DatadogAgent) (reqC
 		if ac.WebhookName != nil {
 			f.webhookName = *ac.WebhookName
 		}
+
+		if ac.CWSInstrumentation != nil && apiutils.BoolValue(ac.CWSInstrumentation.Enabled) {
+			f.cwsInstrumentationEnabled = true
+			f.cwsInstrumentationMode = apiutils.StringValue(ac.CWSInstrumentation.Mode)
+		}
 	}
 	return reqComp
 }
@@ -103,6 +111,11 @@ func (f *admissionControllerFeature) ConfigureV1(dda *v1alpha1.DatadogAgent) (re
 			ClusterAgent: feature.RequiredComponent{IsRequired: apiutils.NewBoolPointer(true)},
 		}
 		f.webhookName = apicommon.DefaultAdmissionControllerWebhookName
+
+		if ac.CWSInstrumentation != nil && apiutils.BoolValue(ac.CWSInstrumentation.Enabled) {
+			f.cwsInstrumentationEnabled = true
+			f.cwsInstrumentationMode = apiutils.StringValue(ac.CWSInstrumentation.Mode)
+		}
 	}
 	return reqComp
 }
@@ -129,7 +142,7 @@ func (f *admissionControllerFeature) ManageDependencies(managers feature.Resourc
 	}
 
 	// rbac
-	if err := managers.RBACManager().AddClusterPolicyRules(ns, rbacName, f.serviceAccountName, getRBACClusterPolicyRules(f.webhookName)); err != nil {
+	if err := managers.RBACManager().AddClusterPolicyRules(ns, rbacName, f.serviceAccountName, getRBACClusterPolicyRules(f.webhookName, f.cwsInstrumentationEnabled, f.cwsInstrumentationMode)); err != nil {
 		return err
 	}
 	return managers.RBACManager().AddPolicyRules(ns, rbacName, f.serviceAccountName, getRBACPolicyRules())
@@ -176,6 +189,18 @@ func (f *admissionControllerFeature) ManageClusterAgent(managers feature.PodTemp
 		Name:  apicommon.DDAdmissionControllerWebhookName,
 		Value: f.webhookName,
 	})
+
+	if f.cwsInstrumentationEnabled {
+		managers.EnvVar().AddEnvVarToContainer(common.ClusterAgentContainerName, &corev1.EnvVar{
+			Name:  apicommon.DDAdmissionControllerCWSInstrumentationEnabled,
+			Value: apiutils.BoolToString(&f.cwsInstrumentationEnabled),
+		})
+
+		managers.EnvVar().AddEnvVarToContainer(common.ClusterAgentContainerName, &corev1.EnvVar{
+			Name:  apicommon.DDAdmissionControllerCWSInstrumentationMode,
+			Value: f.cwsInstrumentationMode,
+		})
+	}
 
 	return nil
 }
