@@ -860,6 +860,11 @@ func (in *DogstatsdFeatureConfig) DeepCopyInto(out *DogstatsdFeatureConfig) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.OriginDetectionUnifiedEnabled != nil {
+		in, out := &in.OriginDetectionUnifiedEnabled, &out.OriginDetectionUnifiedEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.TagCardinality != nil {
 		in, out := &in.TagCardinality, &out.TagCardinality
 		*out = new(string)

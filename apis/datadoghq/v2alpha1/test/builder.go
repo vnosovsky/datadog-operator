@@ -93,6 +93,12 @@ func (builder *DatadogAgentBuilder) WithDogstatsdOriginDetectionEnabled(enabled 
 	return builder
 }
 
+func (builder *DatadogAgentBuilder) WithDogstatsdOriginDetectionUnifiedEnabled(enabled bool) *DatadogAgentBuilder {
+	builder.initDogstatsd()
+	builder.datadogAgent.Spec.Features.Dogstatsd.OriginDetectionUnifiedEnabled = apiutils.NewBoolPointer(enabled)
+	return builder
+}
+
 func (builder *DatadogAgentBuilder) WithDogstatsdTagCardinality(cardinality string) *DatadogAgentBuilder {
 	builder.initDogstatsd()
 	builder.datadogAgent.Spec.Features.Dogstatsd.OriginDetectionEnabled = apiutils.NewBoolPointer(true)

@@ -849,6 +849,10 @@ func defaultEnvVars(extraEnv map[string]string) []corev1.EnvVar {
 			Value: apicommon.DefaultDogstatsdOriginDetection,
 		},
 		{
+			Name:  apicommon.DDOriginDetectionUnified,
+			Value: apicommon.DefaultOriginDetectionUnified,
+		},
+		{
 			Name:  "DD_DOGSTATSD_SOCKET",
 			Value: "/var/run/datadog/statsd.sock",
 		},
@@ -1941,6 +1945,10 @@ func customKubeletConfigPodSpec(kubeletConfig *commonv1.KubeletConfig) corev1.Po
 		{
 			Name:  apicommon.DDDogstatsdOriginDetectionClient,
 			Value: apicommon.DefaultDogstatsdOriginDetection,
+		},
+		{
+			Name:  apicommon.DDOriginDetectionUnified,
+			Value: apicommon.DefaultOriginDetectionUnified,
 		},
 		{
 			Name:  "DD_DOGSTATSD_SOCKET",

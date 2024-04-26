@@ -58,6 +58,8 @@ const (
 	DefaultAdmissionControllerWebhookName string = "datadog-webhook"
 	// DefaultDogstatsdOriginDetection default Origin Detection
 	DefaultDogstatsdOriginDetection = "false"
+	// DefaultOriginDetectionUnified default Origin Detection Unified setting
+	DefaultOriginDetectionUnified = "false"
 	// DefaultDogstatsdPort default dogstatsd port
 	DefaultDogstatsdPort = 8125
 	// DefaultDogstatsdPortName default dogstatsd port name

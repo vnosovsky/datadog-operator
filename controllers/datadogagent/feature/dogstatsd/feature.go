@@ -44,10 +44,11 @@ type dogstatsdFeature struct {
 	udsEnabled      bool
 	udsHostFilepath string
 
-	useHostNetwork         bool
-	originDetectionEnabled bool
-	tagCardinality         string
-	mapperProfiles         *apicommonv1.CustomConfig
+	useHostNetwork                bool
+	originDetectionEnabled        bool
+	OriginDetectionUnifiedEnabled bool
+	tagCardinality                string
+	mapperProfiles                *apicommonv1.CustomConfig
 
 	forceEnableLocalService bool
 	localServiceName        string
@@ -75,6 +76,9 @@ func (f *dogstatsdFeature) Configure(dda *v2alpha1.DatadogAgent) (reqComp featur
 	f.udsHostFilepath = *dogstatsd.UnixDomainSocketConfig.Path
 	if apiutils.BoolValue(dogstatsd.OriginDetectionEnabled) {
 		f.originDetectionEnabled = true
+	}
+	if apiutils.BoolValue(dogstatsd.OriginDetectionUnifiedEnabled) {
+		f.OriginDetectionUnifiedEnabled = true
 	}
 	if dogstatsd.TagCardinality != nil {
 		f.tagCardinality = *dogstatsd.TagCardinality
@@ -242,6 +246,12 @@ func (f *dogstatsdFeature) manageNodeAgent(agentContainerName apicommonv1.AgentC
 			Name:  apicommon.DDDogstatsdOriginDetectionClient,
 			Value: "true",
 		})
+		if f.OriginDetectionUnifiedEnabled {
+			managers.EnvVar().AddEnvVarToContainer(agentContainerName, &corev1.EnvVar{
+				Name:  apicommon.DDOriginDetectionUnified,
+				Value: "true",
+			})
+		}
 		if f.udsEnabled {
 			managers.PodTemplateSpec().Spec.HostPID = true
 		}

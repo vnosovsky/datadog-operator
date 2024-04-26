@@ -294,6 +294,19 @@ func Test_DogstatsdFeature_ConfigureV2(t *testing.T) {
 				},
 			),
 		},
+		{
+			Name: "v2alpha1 uds origin detection",
+			DDAv2: v2alpha1test.NewDefaultDatadogAgentBuilder().
+				WithDogstatsdOriginDetectionUnifiedEnabled(true).BuildWithDefaults(),
+			WantConfigure: true,
+			Agent: test.NewDefaultComponentTest().WithWantFunc(
+				func(t testing.TB, mgrInterface feature.PodTemplateManagers) {
+					mgr := mgrInterface.(*fake.PodTemplateManagers)
+					assert.True(t, mgr.Tpl.Spec.HostPID, "16. Origin Detection Unified \ndiff = %s", cmp.Diff(mgr.Tpl.Spec.HostPID, true))
+					assertWants(t, mgrInterface, "16", getWantVolumeMounts(), getWantVolumes(), []*corev1.EnvVar{getOriginDetectionEnvVar(), getOriginDetectionClientEnvVar(), getOriginDetectionUnifiedEnvVar()}, getWantUDSEnvVarsV2(), getWantContainerPorts())
+				},
+			),
+		},
 	}
 
 	tests.Run(t, buildDogstatsdFeature)
@@ -341,6 +354,14 @@ func getOriginDetectionClientEnvVar() *corev1.EnvVar {
 		Value: "true",
 	}
 	return &originDetectionClientEnvVar
+}
+
+func getOriginDetectionUnifiedEnvVar() *corev1.EnvVar {
+	originDetectionUnifiedEnvVar := corev1.EnvVar{
+		Name:  apicommon.DDOriginDetectionUnified,
+		Value: "false",
+	}
+	return &originDetectionUnifiedEnvVar
 }
 
 func getCustomEnvVar() []*corev1.EnvVar {

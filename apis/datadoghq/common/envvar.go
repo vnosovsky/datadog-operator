@@ -53,6 +53,7 @@ const (
 	DDDogstatsdNonLocalTraffic                        = "DD_DOGSTATSD_NON_LOCAL_TRAFFIC"
 	DDDogstatsdOriginDetection                        = "DD_DOGSTATSD_ORIGIN_DETECTION"
 	DDDogstatsdOriginDetectionClient                  = "DD_DOGSTATSD_ORIGIN_DETECTION_CLIENT"
+	DDOriginDetectionUnified                          = "DD_ORIGIN_DETECTION_UNIFIED"
 	DDDogstatsdTagCardinality                         = "DD_DOGSTATSD_TAG_CARDINALITY"
 	DDDogstatsdPort                                   = "DD_DOGSTATSD_PORT"
 	DDDogstatsdSocket                                 = "DD_DOGSTATSD_SOCKET"

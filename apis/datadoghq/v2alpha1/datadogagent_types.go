@@ -413,6 +413,10 @@ type DogstatsdFeatureConfig struct {
 	// +optional
 	OriginDetectionEnabled *bool `json:"originDetectionEnabled,omitempty"`
 
+	// OriginDetectionUnifiedEnabled enables Unified mechanism for Origin Detection
+	// +optional
+	OriginDetectionUnifiedEnabled *bool `json:"originDetectionUnifiedEnabled,omitempty"`
+
 	// TagCardinality configures tag cardinality for the metrics collected using origin detection (`low`, `orchestrator` or `high`).
 	// See also: https://docs.datadoghq.com/getting_started/tagging/assigning_tags/?tab=containerizedenvironments#environment-variables
 	// Cardinality default: low
