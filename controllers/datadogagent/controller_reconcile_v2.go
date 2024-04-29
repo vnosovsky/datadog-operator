@@ -161,7 +161,8 @@ func (r *Reconciler) reconcileInstanceV2(ctx context.Context, logger logr.Logger
 		}
 
 		if r.options.DatadogAgentProfileEnabled {
-			profileList, profilesByNode, e := r.profilesToApply(ctx, logger, nodeList)
+			now := metav1.NewTime(time.Now())
+			profileList, profilesByNode, e := r.profilesToApply(ctx, logger, nodeList, now)
 			if err != nil {
 				return reconcile.Result{}, e
 			}
@@ -241,6 +242,15 @@ func (r *Reconciler) updateStatusIfNeededV2(logger logr.Logger, agentdeployment 
 	return result, currentError
 }
 
+func (r *Reconciler) updateDAPStatus(logger logr.Logger, profile *datadoghqv1alpha1.DatadogAgentProfile) {
+	if err := r.client.Status().Update(context.TODO(), profile); err != nil {
+		if apierrors.IsConflict(err) {
+			logger.V(1).Info("unable to update DatadogAgentProfile status due to update conflict")
+		}
+		logger.Error(err, "unable to update DatadogAgentProfile status")
+	}
+}
+
 // setMetricsForwarderStatus sets the metrics forwarder status condition if enabled
 func (r *Reconciler) setMetricsForwarderStatusV2(logger logr.Logger, agentdeployment *datadoghqv2alpha1.DatadogAgent, newStatus *datadoghqv2alpha1.DatadogAgentStatus) {
 	if r.options.OperatorMetricsEnabled {
@@ -293,14 +303,44 @@ func (r *Reconciler) updateMetricsForwardersFeatures(dda *datadoghqv2alpha1.Data
 	// }
 }
 
-func (r *Reconciler) profilesToApply(ctx context.Context, logger logr.Logger, nodeList []corev1.Node) ([]datadoghqv1alpha1.DatadogAgentProfile, map[string]types.NamespacedName, error) {
+// ProfilesToApply gets a list of profiles and returns the ones that should be
+// applied in the cluster.
+// - If there are no profiles, it returns the default profile.
+// - If there are no conflicting profiles, it returns all the profiles plus the default one.
+// - If there are conflicting profiles, it returns a subset that does not
+// conflict plus the default one. When there are conflicting profiles, the
+// oldest one is the one that takes precedence. When two profiles share an
+// identical creation timestamp, the profile whose name is alphabetically first
+// is considered to have priority.
+// This function also returns a map that maps each node name to the profile that
+// should be applied to it.
+func (r *Reconciler) profilesToApply(ctx context.Context, logger logr.Logger, nodeList []corev1.Node, now metav1.Time) ([]datadoghqv1alpha1.DatadogAgentProfile, map[string]types.NamespacedName, error) {
 	profilesList := datadoghqv1alpha1.DatadogAgentProfileList{}
 	err := r.client.List(ctx, &profilesList)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return agentprofile.ProfilesToApply(profilesList.Items, nodeList, logger)
+	var profilesToApply []datadoghqv1alpha1.DatadogAgentProfile
+	profileAppliedPerNode := make(map[string]types.NamespacedName, len(nodeList))
+
+	sortedProfiles := agentprofile.SortProfiles(profilesList.Items)
+	for _, profile := range sortedProfiles {
+
+		profileAppliedPerNode, err = agentprofile.ProfileToApply(logger, &profile, nodeList, profileAppliedPerNode, now)
+		r.updateDAPStatus(logger, &profile)
+		if err != nil {
+			// profile is invalid or conflicts
+			logger.Error(err, "profile cannot be applied", "name", profile.Name, "namespace", profile.Namespace)
+			continue
+		}
+		profilesToApply = append(profilesToApply, profile)
+	}
+
+	// add default profile
+	profilesToApply = agentprofile.ApplyDefaultProfile(profilesToApply, profileAppliedPerNode, nodeList)
+
+	return profilesToApply, profileAppliedPerNode, nil
 }
 
 func (r *Reconciler) getNodeList(ctx context.Context) ([]corev1.Node, error) {
