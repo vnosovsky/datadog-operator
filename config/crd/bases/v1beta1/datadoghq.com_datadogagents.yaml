@@ -15370,7 +15370,7 @@ spec:
                           description: 'MutateUnlabelled enables config injection without the need of pod label ''admission.datadoghq.com/enabled="true"''. Default: false'
                           type: boolean
                         registry:
-                          description: registry enables to set the custom registry name on admission controller.
+                          description: Registry enables setting the custom registry name on the admission controller.
                           type: string
                         serviceName:
                           description: ServiceName corresponds to the webhook service name.
