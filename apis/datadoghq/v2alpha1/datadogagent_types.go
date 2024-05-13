@@ -584,6 +584,9 @@ type AdmissionControllerFeatureConfig struct {
 	// Default: "datadog-webhook"
 	// +optional
 	WebhookName *string `json:"webhookName,omitempty"`
+
+	//The registry enables setting a custom registry name on the admission controller.
+	Registry *string `json:"registry,omitempty"`
 }
 
 // ExternalMetricsServerFeatureConfig contains the External Metrics Server feature configuration.
