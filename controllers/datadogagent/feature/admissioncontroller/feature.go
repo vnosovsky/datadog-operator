@@ -59,6 +59,8 @@ func (f *admissionControllerFeature) Configure(dda *v2alpha1.DatadogAgent) (reqC
 		}
 		if ac.Registry != nil && *ac.Registry != "" {
 			f.registry = *ac.Registry
+		} else if dda.Spec.Global.Registry != nil && *dda.Spec.Global.Registry != "" {
+			f.registry = *dda.Spec.Global.Registry
 		}
 		// agent communication mode set by user
 		if ac.AgentCommunicationMode != nil && *ac.AgentCommunicationMode != "" {
